@@ -191,7 +191,7 @@ func (s *Session) appendCmd(cmd string, args []string, cwd Dir, env map[string]s
 			env[k] = v
 		}
 	}
-	environ := newEnviron(s.Env, true) // true: inherit sys-env
+	environ := newEnviron(env, true) // true: inherit sys-env
 	v, ok := s.alias[cmd]
 	if ok {
 		cmd = v[0]
