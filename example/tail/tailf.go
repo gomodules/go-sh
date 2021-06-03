@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/codeskyblue/go-sh"
+	"gomodules.xyz/go-sh"
 )
 
 func main() {

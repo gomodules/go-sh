@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	sh "github.com/codeskyblue/go-sh"
+	sh "gomodules.xyz/go-sh"
 )
 
 func main() {

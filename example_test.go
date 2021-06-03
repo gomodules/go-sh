@@ -3,7 +3,7 @@ package sh_test
 import (
 	"fmt"
 
-	"github.com/codeskyblue/go-sh"
+	"gomodules.xyz/go-sh"
 )
 
 func ExampleCommand() {
