@@ -45,6 +45,10 @@ func (s *Session) Start() (err error) {
 	if s.ShowCMD {
 		s.displayCommandChain()
 	}
+
+	if len(s.cmds) == 0 {
+		return s.executeLeafCommands(nil)
+	}
 	return s.executeCommandChain(0, nil)
 }
 
@@ -92,9 +96,12 @@ func (s *Session) executeCommandChain(index int, stdin *io.PipeReader) error {
 }
 
 func (s *Session) executeLeafCommands(readers []*io.PipeReader) error {
-	for idx, reader := range readers {
-		cmd := s.leafCmds[idx]
-		cmd.Stdin, cmd.Stdout = reader, s.selectLeafCmdStdout()
+	for idx, cmd := range s.leafCmds {
+		cmd.Stdin = s.Stdin
+		if readers != nil && idx < len(readers) {
+			cmd.Stdin = readers[idx]
+		}
+		cmd.Stdout = s.selectLeafCmdStdout()
 		cmd.Stderr = s.Stderr
 		if s.enableErrsBuffer {
 			cmd.Stderr = cmd.Stdout
