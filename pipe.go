@@ -56,34 +56,14 @@ func (s *Session) executeCommandChain(index int, stdin *io.PipeReader) error {
 	if index >= len(s.cmds) {
 		return nil
 	}
-	pipeCount := s.determinePipeCount(index)
-	pipeReaders, pipeWriters := createPipes(pipeCount)
 
-	var writers []io.Writer
-	for _, writer := range pipeWriters {
-		writers = append(writers, writer)
-		s.pipeWriters = append(s.pipeWriters, writer)
-	}
-	multiWriter := io.MultiWriter(writers...)
+	pipeReaders, pipeWriters := createPipes(s.determinePipeCount(index))
 
 	cmd := s.cmds[index]
-	cmd.Stdin = stdin
-	if index == 0 {
-		cmd.Stdin = s.Stdin
-	}
+	cmd.Stdin = s.selectCmdStdin(index, stdin)
+	cmd.Stdout, cmd.Stderr = s.configureCmdOutput(index, pipeWriters)
 
-	if s.isLastCommand(index) && len(s.leafCmds) == 0 {
-		// If it's the last command and no leaf commands
-		cmd.Stdout = s.Stdout
-		cmd.Stderr = s.Stderr
-	} else {
-		// Otherwise, pipe output to the next command
-		cmd.Stdout = multiWriter
-		cmd.Stderr = os.Stderr
-		if s.PipeStdErrors {
-			cmd.Stderr = s.Stderr
-		}
-	}
+	s.pipeWriters = append(s.pipeWriters, pipeWriters...)
 
 	if err := cmd.Start(); err != nil {
 		return err
@@ -95,22 +75,60 @@ func (s *Session) executeCommandChain(index int, stdin *io.PipeReader) error {
 	return s.executeCommandChain(index+1, pipeReaders[0])
 }
 
+func (s *Session) selectCmdStdin(index int, stdin *io.PipeReader) io.Reader {
+	if index == 0 {
+		return s.Stdin
+	}
+	return stdin
+}
+
+func (s *Session) configureCmdOutput(index int, pipeWriters []*io.PipeWriter) (io.Writer, io.Writer) {
+	if s.isLastCommand(index) && len(s.leafCmds) == 0 {
+		return s.Stdout, s.Stderr
+	}
+
+	stdout := io.MultiWriter(pipeWritersToWriters(pipeWriters)...)
+	var stderr io.Writer = os.Stderr
+	if s.PipeStdErrors {
+		stderr = s.Stderr
+	}
+
+	return stdout, stderr
+}
+
+func pipeWritersToWriters(pipeWriters []*io.PipeWriter) []io.Writer {
+	var writers []io.Writer
+	for _, writer := range pipeWriters {
+		writers = append(writers, writer)
+	}
+	return writers
+}
+
 func (s *Session) executeLeafCommands(readers []*io.PipeReader) error {
 	for idx, cmd := range s.leafCmds {
-		cmd.Stdin = s.Stdin
-		if readers != nil && idx < len(readers) {
-			cmd.Stdin = readers[idx]
-		}
+		cmd.Stdin = s.selectLeafCmdStdin(idx, readers)
 		cmd.Stdout = s.selectLeafCmdStdout()
-		cmd.Stderr = s.Stderr
-		if s.enableErrsBuffer {
-			cmd.Stderr = cmd.Stdout
-		}
+		cmd.Stderr = s.selectLeafCmdStderr()
+
 		if err := cmd.Start(); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (s *Session) selectLeafCmdStdin(index int, readers []*io.PipeReader) io.Reader {
+	if readers != nil {
+		return readers[index]
+	}
+	return s.Stdin
+}
+
+func (s *Session) selectLeafCmdStderr() io.Writer {
+	if s.enableErrsBuffer {
+		return s.selectLeafCmdStdout()
+	}
+	return s.Stderr
 }
 
 func (s *Session) selectLeafCmdStdout() io.Writer {
@@ -154,11 +172,11 @@ func (s *Session) displayCommandChain() {
 		}
 		return result
 	}
-	primaryCmds, backupCmds := joinCmds(s.cmds), joinCmds(s.leafCmds)
+	primaryCmds, leafCmds := joinCmds(s.cmds), joinCmds(s.leafCmds)
 
 	totalCmd := strings.Join(primaryCmds, " | ")
-	if len(backupCmds) > 0 {
-		totalCmd += " | " + strings.Join(backupCmds, " , ")
+	if len(leafCmds) > 0 {
+		totalCmd += " | " + strings.Join(leafCmds, " , ")
 	}
 
 	s.writePrompt(totalCmd)

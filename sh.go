@@ -195,6 +195,7 @@ func (s *Session) appendCmd(cmd string, args []string, cwd Dir, env map[string]s
 		s.cmds = make([]*exec.Cmd, 0)
 		s.leafCmds = make([]*exec.Cmd, 0)
 		s.pipeWriters = make([]*io.PipeWriter, 0)
+		s.leafOutputBuffer = make([]*bytes.Buffer, 0)
 	}
 	for k, v := range s.Env {
 		if _, ok := env[k]; !ok {
