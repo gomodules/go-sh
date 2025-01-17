@@ -135,3 +135,45 @@ func TestPipeFail(t *testing.T) {
 		t.Error("expected error")
 	}
 }
+
+func TestLeafCommand(t *testing.T) {
+	s := NewSession()
+	s.ShowCMD = true
+	s.Command("echo", "hello world")
+	s.LeafCommand("xargs")
+	s.LeafCommand("xargs")
+	out, err := s.Output()
+	if err != nil {
+		t.Error(err)
+	}
+
+	if string(out) != "hello world\nhello world\n" {
+		t.Error("capture wrong output:", string(out))
+	}
+}
+
+func TestLeafCommandSeparateEnvs(t *testing.T) {
+	s := NewSession()
+	s.ShowCMD = true
+	var args1 []interface{}
+	var args2 []interface{}
+
+	mp := make(map[string]string)
+	mp["COMPANY_NAME"] = "APPSCODE"
+	args1 = append(args1, "COMPANY_NAME")
+	args1 = append(args1, mp)
+	s.LeafCommand("printenv", args1...)
+
+	mp["COMPANY_NAME"] = "GOOGLE"
+	args2 = append(args2, "COMPANY_NAME")
+	args2 = append(args2, mp)
+	s.LeafCommand("printenv", args2...)
+
+	out, err := s.Output()
+	if err != nil {
+		t.Error(err)
+	}
+	if string(out) != "APPSCODE\nGOOGLE\n" {
+		t.Error("capture wrong output:", string(out))
+	}
+}
