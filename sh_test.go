@@ -82,17 +82,19 @@ func TestSession(t *testing.T) {
 }
 
 /*
-	#!/bin/bash -
-	#
-	export PATH=/usr/bin:/bin
-	alias ll='ls -l'
-	cd /usr
-	if test -d "local"
-	then
-		ll local | awk '{print $1, $NF}' | grep bin
-	fi
+#!/bin/bash -
+#
+export PATH=/usr/bin:/bin
+alias ll='ls -l'
+cd /usr
+if test -d "local"
+then
+
+	ll local | awk '{print $1, $NF}' | grep bin
+
+fi
 */
-func Example(t *testing.T) {
+func Example_session_Command() {
 	s := NewSession()
 	//s.ShowCMD = true
 	s.Env["PATH"] = "/usr/bin:/bin"
