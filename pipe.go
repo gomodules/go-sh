@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -133,7 +134,7 @@ func (s *Session) selectLeafCmdStderr() io.Writer {
 
 func (s *Session) selectLeafCmdStdout() io.Writer {
 	if s.enableOutputBuffer {
-		cmdOutput := &bytes.Buffer{}
+		cmdOutput := &SafeBuffer{}
 		s.leafOutputBuffer = append(s.leafOutputBuffer, cmdOutput)
 		return cmdOutput
 	}
@@ -324,4 +325,12 @@ func (s *Session) writeCmdOutputToStdOut() error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// CurrentLeafOutput returns a snapshot  of output for the leaf command at the given index.
+func (s *Session) CurrentLeafOutput(index int) ([]byte, error) {
+	if index < 0 || index >= len(s.leafOutputBuffer) {
+		return nil, fmt.Errorf("leaf command index %d out of range [0, %d)", index, len(s.leafOutputBuffer))
+	}
+	return s.leafOutputBuffer[index].Bytes(), nil
 }

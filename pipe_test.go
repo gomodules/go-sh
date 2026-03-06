@@ -177,3 +177,69 @@ func TestLeafCommandSeparateEnvs(t *testing.T) {
 		t.Error("capture wrong output:", string(out))
 	}
 }
+
+func TestCurrentLeafOutput(t *testing.T) {
+	s := NewSession()
+	s.ShowCMD = true
+	s.Command("seq", "1", "100")
+	s.LeafCommand("xargs")
+	s.LeafCommand("xargs")
+
+	// Enable output buffering and start the pipeline
+	s.enableOutputBuffer = true
+	if err := s.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Poll CurrentLeafOutput while the pipeline runs
+	done := make(chan error, 1)
+	go func() {
+		done <- s.Wait()
+	}()
+
+	// Poll a few times before the pipeline finishes
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+
+loop:
+	for {
+		select {
+		case <-ticker.C:
+			// Safe to call concurrently with Write
+			_, _ = s.CurrentLeafOutput(0)
+			_, _ = s.CurrentLeafOutput(1)
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+			break loop
+		}
+	}
+
+	// After completion, both leaf outputs should be non-empty
+	out0, err := s.CurrentLeafOutput(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out1, err := s.CurrentLeafOutput(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out0) == 0 {
+		t.Error("expected non-empty output for leaf 0")
+	}
+	if len(out1) == 0 {
+		t.Error("expected non-empty output for leaf 1")
+	}
+
+	// Both leaf commands get the same parent output, so they should match
+	if string(out0) != string(out1) {
+		t.Errorf("expected identical outputs, got:\nleaf0: %q\nleaf1: %q", string(out0), string(out1))
+	}
+
+	// Out-of-range index should return an error
+	_, err = s.CurrentLeafOutput(5)
+	if err == nil {
+		t.Error("expected error for out-of-range index")
+	}
+}
