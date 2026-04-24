@@ -64,6 +64,9 @@ type Session struct {
 	leafOutputBuffer   []*SafeBuffer // Buffers to store the output of each command
 	enableOutputBuffer bool          // If true, collect all command outputs in buffers
 	enableErrsBuffer   bool          // If true, collect all command errors in buffers
+
+	// Last CMD Output
+	lastOutputBuffer *SafeBuffer
 }
 
 func (s *Session) writePrompt(args ...interface{}) {
@@ -195,6 +198,7 @@ func (s *Session) appendCmd(cmd string, args []string, cwd Dir, env map[string]s
 		s.leafCmds = make([]*exec.Cmd, 0)
 		s.pipeWriters = make([]*io.PipeWriter, 0)
 		s.leafOutputBuffer = make([]*SafeBuffer, 0)
+		s.lastOutputBuffer = new(SafeBuffer)
 	}
 	for k, v := range s.Env {
 		if _, ok := env[k]; !ok {
@@ -241,6 +245,8 @@ func (s *Session) appendLeafCmd(cmd string, args []string, cwd Dir, env map[stri
 		s.started = false
 		s.leafCmds = make([]*exec.Cmd, 0)
 		s.pipeWriters = make([]*io.PipeWriter, 0)
+		s.leafOutputBuffer = make([]*SafeBuffer, 0)
+		s.lastOutputBuffer = new(SafeBuffer)
 	}
 	for k, v := range s.Env {
 		if _, ok := env[k]; !ok {

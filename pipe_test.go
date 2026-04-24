@@ -1,6 +1,7 @@
 package sh
 
 import (
+	"bytes"
 	"encoding/xml"
 	"io"
 	"os"
@@ -178,7 +179,7 @@ func TestLeafCommandSeparateEnvs(t *testing.T) {
 	}
 }
 
-func TestCurrentLeafOutput(t *testing.T) {
+func TestCurrentOutput(t *testing.T) {
 	s := NewSession()
 	s.ShowCMD = true
 	s.Command("seq", "1", "100")
@@ -191,7 +192,7 @@ func TestCurrentLeafOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Poll CurrentLeafOutput while the pipeline runs
+	// Poll CurrentOutput while the pipeline runs
 	done := make(chan error, 1)
 	go func() {
 		done <- s.Wait()
@@ -206,8 +207,8 @@ loop:
 		select {
 		case <-ticker.C:
 			// Safe to call concurrently with Write
-			_, _ = s.CurrentLeafOutput(0)
-			_, _ = s.CurrentLeafOutput(1)
+			_, _ = s.CurrentOutput(0)
+			_, _ = s.CurrentOutput(1)
 		case err := <-done:
 			if err != nil {
 				t.Fatal(err)
@@ -217,11 +218,11 @@ loop:
 	}
 
 	// After completion, both leaf outputs should be non-empty
-	out0, err := s.CurrentLeafOutput(0)
+	out0, err := s.CurrentOutput(0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	out1, err := s.CurrentLeafOutput(1)
+	out1, err := s.CurrentOutput(1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,8 +239,134 @@ loop:
 	}
 
 	// Out-of-range index should return an error
-	_, err = s.CurrentLeafOutput(5)
+	_, err = s.CurrentOutput(5)
 	if err == nil {
 		t.Error("expected error for out-of-range index")
+	}
+}
+
+func TestCurrentOutputForCommandChain(t *testing.T) {
+	s := NewSession()
+	s.Command("sh", "-c", "for i in $(seq 1 20); do echo $i; sleep 0.01; done").Command("cat")
+
+	s.enableOutputBuffer = true
+	if err := s.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- s.Wait()
+	}()
+
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	timeout := time.After(3 * time.Second)
+
+	sawProgress := false
+loop:
+	for {
+		select {
+		case <-ticker.C:
+			out, err := s.CurrentOutput(0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(out) > 0 {
+				sawProgress = true
+			}
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+			break loop
+		case <-timeout:
+			t.Fatal("pipeline did not finish in time")
+		}
+	}
+
+	out, err := s.CurrentOutput(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "1\n") || !strings.Contains(string(out), "20\n") {
+		t.Fatalf("unexpected output: %q", string(out))
+	}
+	if !sawProgress {
+		t.Fatal("expected to observe non-empty in-flight output")
+	}
+
+	if _, err := s.CurrentOutput(1); err == nil {
+		t.Fatal("expected out-of-range error for command chain")
+	}
+}
+
+func TestCurrentLeafOutputCompatibility(t *testing.T) {
+	s := NewSession()
+	s.Command("echo", "hello")
+	s.enableOutputBuffer = true
+	if err := s.Start(); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	out1, err := s.CurrentOutput(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out2, err := s.CurrentLeafOutput(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out1) != string(out2) {
+		t.Fatalf("compat mismatch: CurrentOutput=%q CurrentLeafOutput=%q", string(out1), string(out2))
+	}
+}
+
+func TestOutputThenRunKeepsRunWorking(t *testing.T) {
+	s := NewSession()
+	s.Command("echo", "hello")
+
+	out, err := s.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != "hello\n" {
+		t.Fatalf("unexpected output(): %q", string(out))
+	}
+
+	// Rebuild command list before next run because exec.Cmd cannot be started twice.
+	s.Command("echo", "hello")
+	var runOut bytes.Buffer
+	s.Stdout = &runOut
+	if err := s.Run(); err != nil {
+		t.Fatal(err)
+	}
+	if got := runOut.String(); got != "hello\n" {
+		t.Fatalf("run output mismatch, got %q", got)
+	}
+}
+
+func TestOutputTwiceNoDuplicate(t *testing.T) {
+	s := NewSession()
+	s.Command("echo", "hello")
+
+	out1, err := s.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Command("echo", "hello")
+	out2, err := s.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(out1) != "hello\n" {
+		t.Fatalf("first output mismatch, got %q", string(out1))
+	}
+	if string(out2) != "hello\n" {
+		t.Fatalf("second output mismatch, got %q", string(out2))
 	}
 }

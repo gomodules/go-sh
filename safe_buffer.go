@@ -25,3 +25,9 @@ func (sb *SafeBuffer) Bytes() []byte {
 	copy(cp, sb.buf.Bytes())
 	return cp
 }
+
+func (sb *SafeBuffer) Reset() {
+	sb.mu.Lock()
+	defer sb.mu.Unlock()
+	sb.buf.Reset()
+}

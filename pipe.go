@@ -57,7 +57,6 @@ func (s *Session) executeCommandChain(index int, stdin *io.PipeReader) error {
 	if index >= len(s.cmds) {
 		return nil
 	}
-
 	pipeReaders, pipeWriters := createPipes(s.determinePipeCount(index))
 
 	cmd := s.cmds[index]
@@ -65,7 +64,6 @@ func (s *Session) executeCommandChain(index int, stdin *io.PipeReader) error {
 	cmd.Stdout, cmd.Stderr = s.configureCmdOutput(index, pipeWriters)
 
 	s.pipeWriters = append(s.pipeWriters, pipeWriters...)
-
 	if err := cmd.Start(); err != nil {
 		return err
 	}
@@ -85,6 +83,14 @@ func (s *Session) selectCmdStdin(index int, stdin *io.PipeReader) io.Reader {
 
 func (s *Session) configureCmdOutput(index int, pipeWriters []*io.PipeWriter) (io.Writer, io.Writer) {
 	if s.isLastCommand(index) && len(s.leafCmds) == 0 {
+		if s.enableOutputBuffer {
+			cmdOutput := &SafeBuffer{}
+			s.lastOutputBuffer = cmdOutput
+			if s.enableErrsBuffer {
+				return cmdOutput, cmdOutput
+			}
+			return cmdOutput, s.Stderr
+		}
 		return s.Stdout, s.Stderr
 	}
 
@@ -238,6 +244,8 @@ func Go(f func() error) chan error {
 }
 
 func (s *Session) Run() (err error) {
+	s.resetOutputBuffer()
+	defer s.resetOutputBuffer()
 	if err = s.Start(); err != nil {
 		return
 	}
@@ -324,13 +332,46 @@ func (s *Session) writeCmdOutputToStdOut() error {
 			errs = append(errs, err)
 		}
 	}
+
+	if len(s.leafOutputBuffer) == 0 && s.lastOutputBuffer != nil {
+		_, err := s.Stdout.Write(s.lastOutputBuffer.Bytes())
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
 	return errors.Join(errs...)
 }
 
-// CurrentLeafOutput returns a snapshot  of output for the leaf command at the given index.
-func (s *Session) CurrentLeafOutput(index int) ([]byte, error) {
-	if index < 0 || index >= len(s.leafOutputBuffer) {
-		return nil, fmt.Errorf("leaf command index %d out of range [0, %d)", index, len(s.leafOutputBuffer))
+func (s *Session) resetOutputBuffer() {
+	for _, buffer := range s.leafOutputBuffer {
+		buffer.Reset()
 	}
-	return s.leafOutputBuffer[index].Bytes(), nil
+	if s.lastOutputBuffer != nil {
+		s.lastOutputBuffer.Reset()
+	}
+}
+
+// CurrentOutput returns a snapshot of command output at the given index.
+// If leaf commands exist, index maps to the leaf command index.
+// Otherwise, only index 0 is valid and returns the last command output.
+func (s *Session) CurrentOutput(index int) ([]byte, error) {
+	if len(s.leafOutputBuffer) > 0 {
+		if index < 0 || index >= len(s.leafOutputBuffer) {
+			return nil, fmt.Errorf("leaf command index %d out of range [0, %d)", index, len(s.leafOutputBuffer))
+		}
+		return s.leafOutputBuffer[index].Bytes(), nil
+	}
+
+	if s.lastOutputBuffer == nil {
+		return nil, fmt.Errorf("leaf command index %d out of range [0, 0)", index)
+	}
+	if index != 0 {
+		return nil, fmt.Errorf("leaf command index %d out of range [0, 1)", index)
+	}
+	return s.lastOutputBuffer.Bytes(), nil
+}
+
+// CurrentLeafOutput is kept for backward compatibility. Use CurrentOutput instead.
+func (s *Session) CurrentLeafOutput(index int) ([]byte, error) {
+	return s.CurrentOutput(index)
 }
