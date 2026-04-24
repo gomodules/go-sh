@@ -18,6 +18,10 @@ var ErrExecTimeout = errors.New("execute timeout")
 
 // unmarshal shell output to decode json
 func (s *Session) UnmarshalJSON(data interface{}) (err error) {
+	oldout, oldbuf := s.Stdout, s.enableOutputBuffer
+	defer func() {
+		s.Stdout, s.enableOutputBuffer = oldout, oldbuf
+	}()
 	bufrw := bytes.NewBuffer(nil)
 	s.Stdout, s.enableOutputBuffer = bufrw, true
 	err = s.Run()
@@ -30,6 +34,10 @@ func (s *Session) UnmarshalJSON(data interface{}) (err error) {
 
 // unmarshal command output into xml
 func (s *Session) UnmarshalXML(data interface{}) (err error) {
+	oldout, oldbuf := s.Stdout, s.enableOutputBuffer
+	defer func() {
+		s.Stdout, s.enableOutputBuffer = oldout, oldbuf
+	}()
 	bufrw := bytes.NewBuffer(nil)
 	s.Stdout, s.enableOutputBuffer = bufrw, true
 	err = s.Run()
@@ -245,7 +253,6 @@ func Go(f func() error) chan error {
 
 func (s *Session) Run() (err error) {
 	s.resetOutputBuffer()
-	defer s.resetOutputBuffer()
 	if err = s.Start(); err != nil {
 		return
 	}
@@ -256,9 +263,9 @@ func (s *Session) Run() (err error) {
 }
 
 func (s *Session) Output() (out []byte, err error) {
-	oldout := s.Stdout
+	oldout, oldbuf := s.Stdout, s.enableOutputBuffer
 	defer func() {
-		s.Stdout = oldout
+		s.Stdout, s.enableOutputBuffer = oldout, oldbuf
 	}()
 	stdout := bytes.NewBuffer(nil)
 	s.Stdout = stdout
@@ -270,9 +277,9 @@ func (s *Session) Output() (out []byte, err error) {
 }
 
 func (s *Session) WriteStdout(f string) error {
-	oldout := s.Stdout
+	oldout, oldbuf := s.Stdout, s.enableOutputBuffer
 	defer func() {
-		s.Stdout = oldout
+		s.Stdout, s.enableOutputBuffer = oldout, oldbuf
 	}()
 
 	out, err := os.Create(f)
@@ -288,9 +295,9 @@ func (s *Session) WriteStdout(f string) error {
 }
 
 func (s *Session) AppendStdout(f string) error {
-	oldout := s.Stdout
+	oldout, oldbuf := s.Stdout, s.enableOutputBuffer
 	defer func() {
-		s.Stdout = oldout
+		s.Stdout, s.enableOutputBuffer = oldout, oldbuf
 	}()
 
 	out, err := os.OpenFile(f, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -306,11 +313,11 @@ func (s *Session) AppendStdout(f string) error {
 }
 
 func (s *Session) CombinedOutput() (out []byte, err error) {
-	oldout := s.Stdout
-	olderr := s.Stderr
+	oldout, olderr := s.Stdout, s.Stderr
+	oldbuf, olderrbuf := s.enableOutputBuffer, s.enableErrsBuffer
 	defer func() {
-		s.Stdout = oldout
-		s.Stderr = olderr
+		s.Stdout, s.Stderr = oldout, olderr
+		s.enableOutputBuffer, s.enableErrsBuffer = oldbuf, olderrbuf
 	}()
 	stdout := bytes.NewBuffer(nil)
 	s.Stdout = stdout
