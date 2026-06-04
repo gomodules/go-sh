@@ -92,7 +92,7 @@ func (s *Session) selectCmdStdin(index int, stdin *io.PipeReader) io.Reader {
 func (s *Session) configureCmdOutput(index int, pipeWriters []*io.PipeWriter) (io.Writer, io.Writer) {
 	if s.isLastCommand(index) && len(s.leafCmds) == 0 {
 		if s.enableOutputBuffer {
-			cmdOutput := &SafeBuffer{}
+			cmdOutput := &safeBuffer{}
 			s.lastOutputBuffer = cmdOutput
 			if s.enableErrsBuffer {
 				return cmdOutput, cmdOutput
@@ -148,7 +148,7 @@ func (s *Session) selectLeafCmdStderr() io.Writer {
 
 func (s *Session) selectLeafCmdStdout() io.Writer {
 	if s.enableOutputBuffer {
-		cmdOutput := &SafeBuffer{}
+		cmdOutput := &safeBuffer{}
 		s.leafOutputBuffer = append(s.leafOutputBuffer, cmdOutput)
 		return cmdOutput
 	}
