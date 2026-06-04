@@ -1,26 +1,41 @@
 name: CI
 
 on:
-  push:
-    branches: [master]
   pull_request:
-    branches: [master]
+    branches:
+      - "*"
+  push:
+    branches:
+      - master
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}-ci
   cancel-in-progress: true
 
 jobs:
+  label-detector:
+    name: Runner Label
+    runs-on: label-detector
+    outputs:
+      runs-on: ${{ steps.detector.outputs.label }}
+    steps:
+      - name: Detect Label
+        id: detector
+        run: |
+          # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idoutputs
+          echo "label=$(curl -fsSL https://this-is-nats.appscode.ninja/runs-on/${{ github.repository_owner }}?visibility=${{ github.repository_visibility }})" >> $GITHUB_OUTPUT
+
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-
-      - name: Set up Go
-        uses: actions/setup-go@v2
+      - name: Set up Go 1.25
+        uses: actions/setup-go@v5
         with:
-          go-version: 1.24
+          go-version: '1.25'
+        id: go
+
+      - uses: actions/checkout@v4
 
       - name: Build
         run: go build -v ./...
