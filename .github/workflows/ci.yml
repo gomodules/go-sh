@@ -14,28 +14,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  label-detector:
-    name: Runner Label
-    runs-on: label-detector
-    outputs:
-      runs-on: ${{ steps.detector.outputs.label }}
-    steps:
-      - name: Detect Label
-        id: detector
-        run: |
-          # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idoutputs
-          echo "label=$(curl -fsSL https://this-is-nats.appscode.ninja/runs-on/${{ github.repository_owner }}?visibility=${{ github.repository_visibility }})" >> $GITHUB_OUTPUT
-
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go 1.25
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version: '1.25'
         id: go
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Build
         run: go build -v ./...
