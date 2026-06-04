@@ -23,7 +23,7 @@ func main() {
 	}()
 
 	tick := time.NewTicker(1 * time.Second)
-
+	defer tick.Stop()
 loop:
 	for {
 		select {
