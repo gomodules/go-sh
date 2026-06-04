@@ -364,16 +364,16 @@ func (s *Session) resetOutputBuffer() {
 func (s *Session) CurrentOutput(index int) ([]byte, error) {
 	if len(s.leafOutputBuffer) > 0 {
 		if index < 0 || index >= len(s.leafOutputBuffer) {
-			return nil, fmt.Errorf("leaf command index %d out of range [0, %d)", index, len(s.leafOutputBuffer))
+			return nil, fmt.Errorf("index %d out of range [0, %d)", index, len(s.leafOutputBuffer))
 		}
 		return s.leafOutputBuffer[index].Bytes(), nil
 	}
 
 	if s.lastOutputBuffer == nil {
-		return nil, fmt.Errorf("leaf command index %d out of range [0, 0)", index)
+		return nil, fmt.Errorf("no output buffer available; ensure the command was started with buffered output")
 	}
 	if index != 0 {
-		return nil, fmt.Errorf("leaf command index %d out of range [0, 1)", index)
+		return nil, fmt.Errorf("index %d out of range: only index 0 is valid for non-leaf command chains", index)
 	}
 	return s.lastOutputBuffer.Bytes(), nil
 }

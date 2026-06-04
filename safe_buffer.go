@@ -21,9 +21,7 @@ func (sb *SafeBuffer) Write(p []byte) (n int, err error) {
 func (sb *SafeBuffer) Bytes() []byte {
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
-	cp := make([]byte, sb.buf.Len())
-	copy(cp, sb.buf.Bytes())
-	return cp
+	return bytes.Clone(sb.buf.Bytes())
 }
 
 func (sb *SafeBuffer) Reset() {
